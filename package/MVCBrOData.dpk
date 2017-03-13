@@ -1,4 +1,4 @@
-package MVCBrVCL;
+package MVCBrOData;
 
 {$R *.res}
 {$IFDEF IMPLICITBUILDING This IFDEF should not be used by users}
@@ -24,32 +24,19 @@ package MVCBrVCL;
 {$MINENUMSIZE 1}
 {$IMAGEBASE $400000}
 {$DEFINE DEBUG}
-{$DEFINE BPL}
-{$DEFINE VCL}
 {$ENDIF IMPLICITBUILDING}
 {$IMPLICITBUILD ON}
 
 requires
   rtl,
-  MVCBrCore,
-  DesignIDE,
-  dbrtl,
-  CustomIPTransport,
-  IndyIPCommon,
   IndySystem,
   IndyProtocols,
   IndyCore,
-  IndyIPClient,
-  bindengine,
-  bindcomp,
-  FireDAC;
+  DesignIDE,
+  dbrtl;
 
 contains
-  MVCBr.DesignEditors.Helper in '..\VCL\MVCBr.DesignEditors.Helper.pas',
-  MVCBr.IdHTTPRestClient in '..\VCL\MVCBr.IdHTTPRestClient.pas',
-  MVCBr.IdHTTPRestClientReg in '..\VCL\MVCBr.IdHTTPRestClientReg.pas',
-  MVCBr.VCL.PageView in '..\VCL\MVCBr.VCL.PageView.pas',
-  oData.Client in '..\oData\oData.Client.pas',
-  oData.Client.Builder in '..\oData\oData.Client.Builder.pas';
+  oData.Comp.Client in '..\oData\oData.Comp.Client.pas',
+  oData.Comp.Editor in '..\oData\oData.Comp.Editor.pas' {oDataResourceEditor};
 
 end.

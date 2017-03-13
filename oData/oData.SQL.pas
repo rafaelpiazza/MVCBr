@@ -24,7 +24,7 @@ type
   public
     function QueryClass: TDatasetClass; virtual;
     function Select: string; virtual;
-    function CreateQuery(FParse: IODataParse; AInLineCount: boolean = false)
+    function CreateGETQuery(FParse: IODataParse; AInLineCount: boolean = false)
       : string; virtual;
     function createSearchFields(FParse: IODataParse; const ASearch: String;
       const fields: string): String; virtual;
@@ -38,8 +38,8 @@ type
 
     procedure DecodeODataURL(CTX: TObject); override;
 
-    function GetDataset(var JSONResponse: TJSONObject): TObject; override;
-    function ExecuteDelete(ABody: string; var JSONResponse: TJSONObject)
+    function ExecuteGET(AJsonBody:TJsonValue;var JSONResponse: TJSONObject): TObject; override;
+    function ExecuteDELETE(ABody: string; var JSONResponse: TJSONObject)
       : Integer; override;
 
   end;
@@ -69,13 +69,13 @@ var
   LRowState: string;
 begin
   LJson := TInterfacedJsonObject.New(AJsonBody);
-  if LJson.JsonObject.TryGetValue<string>('RowState', LRowState) then
+  if LJson.JsonObject.TryGetValue<string>(cODataRowState, LRowState) then
   begin
-    if sametext(LRowState, 'Modified') then
+    if LRowState = cODataModified then
       result := AdapterAPI.CreatePATCHQuery(FParse.oData, AJsonBody)
-    else if sametext(LRowState, 'Deleted') then
+    else if LRowState = cODataDeleted then
       result := AdapterAPI.CreateDeleteQuery(FParse.oData, AJsonBody)
-    else if sametext(LRowState, 'Inserted') then
+    else if LRowState = cODataInserted then
       result := AdapterAPI.CreatePOSTQuery(FParse.oData, AJsonBody)
     else
       raise Exception.Create(tODataError.Create(500, 'RowState inválido'));
@@ -92,10 +92,10 @@ begin
   FResource := AdapterAPI.GetResource as IJsonODastaServiceResource;
 end;
 
-function TODataSQL.CreateQuery(FParse: IODataParse;
+function TODataSQL.CreateGETQuery(FParse: IODataParse;
   AInLineCount: boolean = false): string;
 begin
-  result := AdapterAPI.CreateQuery(FParse.oData,
+  result := AdapterAPI.createGETQuery(FParse.oData,
     EncodeFilterSql(FParse.oData.Filter), AInLineCount);
   FResource := AdapterAPI.GetResource as IJsonODastaServiceResource;
 
@@ -152,13 +152,13 @@ begin
   result := TODataParse.OperatorToString(AFilter);
 end;
 
-function TODataSQL.ExecuteDelete(ABody: string;
+function TODataSQL.ExecuteDELETE(ABody: string;
   var JSONResponse: TJSONObject): Integer;
 begin
   result := 0;
 end;
 
-function TODataSQL.GetDataset(var JSONResponse: TJSONObject): TObject;
+function TODataSQL.ExecuteGET(AJsonBody:TJsonValue;var JSONResponse: TJSONObject): TObject;
 begin
   result := nil;
 end;

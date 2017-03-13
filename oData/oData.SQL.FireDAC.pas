@@ -22,10 +22,11 @@ type
     destructor destroy; override;
     function QueryClass: TDataSetclass; override;
     property Connection: TFDConnection read FConnection write SetConnection;
-    function GetDataset(var JSONResponse: TJSONObject): TObject; override;
-    function ExecuteDelete(ABody: string; var JSONResponse: TJSONObject)
+    function ExecuteGET(AJsonBody: TJsonValue; var JSONResponse: TJSONObject)
+      : TObject; override;
+    function ExecuteDELETE(ABody: string; var JSONResponse: TJSONObject)
       : Integer; override;
-    function ExecutePost(ABody: string; var JSONResponse: TJSONObject)
+    function ExecutePOST(ABody: string; var JSONResponse: TJSONObject)
       : Integer; override;
     function ExecutePATCH(ABody: string; var JSONResponse: TJSONObject)
       : Integer; override;
@@ -36,7 +37,7 @@ type
 
 implementation
 
-uses idURI, oData.JSON, oData.engine;
+uses System.Rtti, idURI, oData.JSON, oData.engine;
 { TODataFiredacQuery }
 
 procedure TODataFiredacQuery.CreateExpandCollections(AQuery: TObject);
@@ -51,7 +52,7 @@ begin
   inherited;
 end;
 
-function TODataFiredacQuery.ExecuteDelete(ABody: string;
+function TODataFiredacQuery.ExecuteDELETE(ABody: string;
   var JSONResponse: TJSONObject): Integer;
 var
   AJson: string;
@@ -71,6 +72,7 @@ begin
   result := 0;
   freeAndNil(FQuery);
   FQuery := QueryClass.Create(nil) as TFdQuery;
+  FQuery.Connection.StartTransaction;
   try
     if isArray then
     begin
@@ -84,13 +86,18 @@ begin
     end
     else
     begin
-      FQuery.SQL.Text := CreateDeleteQuery(FODataParse, js.JsonValue);
+      if js = nil then
+        FQuery.SQL.Text := CreateDeleteQuery(FODataParse, nil)
+      else
+        FQuery.SQL.Text := CreateDeleteQuery(FODataParse, js.JsonValue);
       FQuery.ExecSQL;
       result := result + FQuery.RowsAffected;
     end;
+    FQuery.Connection.Commit;
   except
     on e: exception do
     begin
+      FQuery.Connection.Rollback;
       result := 0;
       if e.Message.StartsWith('{') then
         raise
@@ -114,6 +121,7 @@ function TODataFiredacQuery.ExecutePATCH(ABody: string;
   var JSONResponse: TJSONObject): Integer;
 var
   AJson: string;
+  jo: TJsonValue;
   js: IJsonObject;
   isArray: boolean;
   ji: TJsonValue;
@@ -123,13 +131,18 @@ begin
   AJson := ABody;
   if ABody <> '' then
   begin
-    js := TInterfacedJsonObject.New(TJSONObject.ParseJSONValue(ABody), false);
-    isArray := js.JSON is TJsonArray;
+    jo := TJSONObject.ParseJSONValue(ABody);
+    if assigned(jo) then
+    begin
+      js := TInterfacedJsonObject.New(jo, false);
+      isArray := js.JSON is TJsonArray;
+    end;
   end;
 
   result := 0;
   freeAndNil(FQuery);
   FQuery := QueryClass.Create(nil) as TFdQuery;
+  FQuery.Connection.StartTransaction;
   try
     if isArray then
     begin
@@ -147,9 +160,11 @@ begin
       FQuery.ExecSQL;
       result := result + FQuery.RowsAffected;
     end;
+    FQuery.Connection.Commit;
   except
     on e: exception do
     begin
+      FQuery.Connection.Rollback;
       result := 0;
       if e.Message.StartsWith('{') then
         raise
@@ -159,7 +174,7 @@ begin
   end;
 end;
 
-function TODataFiredacQuery.ExecutePost(ABody: string;
+function TODataFiredacQuery.ExecutePOST(ABody: string;
   var JSONResponse: TJSONObject): Integer;
 var
   AJson: string;
@@ -179,7 +194,9 @@ begin
   result := 0;
   freeAndNil(FQuery);
   FQuery := QueryClass.Create(nil) as TFdQuery;
+  FQuery.Connection.StartTransaction;
   try
+
     if isArray then
     begin
       for ji in js.AsArray do
@@ -196,9 +213,11 @@ begin
       FQuery.ExecSQL;
       result := result + FQuery.RowsAffected;
     end;
+    FQuery.Connection.Commit;
   except
     on e: exception do
     begin
+      FQuery.Connection.Rollback;
       result := 0;
       if e.Message.StartsWith('{') then
         raise
@@ -208,7 +227,12 @@ begin
   end;
 end;
 
-function TODataFiredacQuery.GetDataset(var JSONResponse: TJSONObject): TObject;
+function TODataFiredacQuery.ExecuteGET(AJsonBody: TJsonValue;
+  var JSONResponse: TJSONObject): TObject;
+var
+  i: Integer;
+  v: TValue;
+  n: Integer;
 begin
   InLineRecordCount := -1;
   freeAndNil(FQuery);
@@ -220,24 +244,33 @@ begin
     if (FODataParse.oData.count = 'true') and
       ((FODataParse.oData.Skip > 0) or (FODataParse.oData.Top > 0)) then
     begin
-      FQuery.SQL.Text := CreateQuery(FODataParse, true);
+      FQuery.SQL.Text := CreateGETQuery(FODataParse, true);
       FQuery.Open;
       InLineRecordCount := FQuery.FieldByName('N__Count').AsInteger;
       FQuery.Close;
     end;
 
-    FQuery.SQL.Text := CreateQuery(FODataParse);
+    FQuery.SQL.Text := CreateGETQuery(FODataParse);
 
     if FODataParse.oData.Search <> '' then
     begin
-      FQuery.Filter := createSearchFields(FODataParse,FODataParse.oData.Search,   FResource.searchFields );
-      FQuery.Filtered := FQuery.Filter<>'';
+      FQuery.Filter := createSearchFields(FODataParse, FODataParse.oData.Search,
+        FResource.searchFields);
+      FQuery.Filtered := FQuery.Filter <> '';
     end;
 
     // criar NextedDataset -   $expand  command
     if (FODataParse.oData.Expand <> '') and
       (not(FODataParse.oData.count = 'true')) then
       CreateExpandCollections(FQuery);
+
+    // preenche os parametros....
+    if AJsonBody <> nil then
+      for i := 0 to FQuery.ParamCount - 1 do
+      begin
+        if AJsonBody.TryGetValue<TValue>(FQuery.Params[i].Name, v) then
+          FQuery.Params[i].Value := v.AsVariant
+      end;
 
     FQuery.Open;
   except

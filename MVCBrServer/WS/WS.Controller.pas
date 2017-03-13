@@ -59,7 +59,7 @@ function CreateMVCEngine(ASender: TWebModule): TMVCEngine;
 
 implementation
 
-uses MVCAsyncMiddleware;
+uses MVCAsyncMiddleware, MVCgzipMiddleware;
 
 function CreateMVCEngine(ASender: TWebModule): TMVCEngine;
 begin
@@ -91,6 +91,8 @@ begin
       // Define a default URL for requests that don't map to a route or a file (useful for client side web app)
       Config[TMVCConfigKey.FallbackResource] := 'index.html';
     end);
+
+  LoadWSControllers(result);
 
 end;
 
@@ -167,7 +169,8 @@ begin
     finally
       FList.UnlockList;
     end;
-  FMVC.AddMiddleware(TMVCAsyncCallBackMiddleware.create);
+  FMVC.AddMiddleware(TMVCgzipCallBackMiddleware.Create);
+  FMVC.AddMiddleware(TMVCAsyncCallBackMiddleware.Create);
 end;
 
 function RegisterWSController(const AClass: TMVCControllerClass): integer;
@@ -184,12 +187,9 @@ end;
 initialization
 
 FList := TThreadList<TMVCControllerClass>.Create;
-// TWSController.New(TWSView.New,TWSViewModel.New)).init();
-// RegisterInterfacedClass(TWSController.ClassName, IWSController, TWSController);
 
 finalization
 
 FList.Free;
-// unRegisterInterfacedClass(TWSController.ClassName);
 
 end.
